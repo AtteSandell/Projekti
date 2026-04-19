@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8" />
+  <title>TGK Kierrosseuranta</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;padding:0;background:#f4f4f4;color:#222}
+    header{background:#0b5c2b;color:#fff;padding:1rem;text-align:center}
+    main{max-width:900px;margin:0 auto;padding:1rem}
+    .card{background:#fff;border-radius:8px;padding:1rem;margin-bottom:1rem;box-shadow:0 2px 4px rgba(0,0,0,0.08)}
+    button{cursor:pointer;border-radius:6px;border:none;padding:.6rem 1rem;font-size:1rem;background:#0b5c2b;color:#fff;margin:.25rem}
+    button.secondary{background:#ddd;color:#222}
+    button.danger{background:#b00020}
+    button:disabled{opacity:.5;cursor:default}
+    .flex-between{display:flex;justify-content:space-between;align-items:center;gap:.5rem}
+    table{width:100%;border-collapse:collapse;margin-top:.5rem;font-size:.9rem}
+    th,td{border-bottom:1px solid #ddd;padding:.4rem .3rem;text-align:left}
+    th{background:#f0f0f0}
+    .keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-top:.5rem}
+    .keypad button{padding:.8rem;font-size:1.1rem}
+    .pill-toggle{display:inline-flex;border-radius:999px;overflow:hidden;border:1px solid #ccc;margin-bottom:.5rem}
+    .pill-toggle button{border-radius:0;background:#f5f5f5;color:#222;padding:.4rem .8rem;font-size:.9rem;border-right:1px solid #ccc}
+    .pill-toggle button:last-child{border-right:none}
+    .pill-toggle .active-yes{background:#0b5c2b;color:#fff}
+    .pill-toggle .active-no{background:#b00020;color:#fff}
+    .hole-tabs{display:flex;flex-wrap:wrap;gap:.25rem;margin-bottom:.75rem}
+    .hole-tab{padding:.3rem .6rem;border-radius:999px;border:1px solid #ccc;background:#f5f5f5;font-size:.8rem;cursor:pointer}
+    .hole-tab.active{background:#0b5c2b;color:#fff;border-color:#0b5c2b}
+    .badge-par{font-size:.8rem;padding:.1rem .4rem;border-radius:999px;background:#e0f2e9;color:#0b5c2b;margin-left:.25rem}
+    .summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;margin-top:.5rem}
+    .summary-box{background:#fafafa;border-radius:6px;padding:.5rem .75rem;border:1px solid #e0e0e0;font-size:.9rem}
+    .summary-box strong{display:block;margin-bottom:.25rem}
+    .small{font-size:.8rem;color:#666}
+    @media(max-width:600px){.flex-between{flex-direction:column;align-items:flex-start}}
+  </style>
+</head>
+<body>
+<header>
+  <h1>TGK Kierrosseuranta</h1>
+  <div>Tuusulan Golfklubi · Par 71</div>
+</header>
+<main>
+  <div id="app"></div>
+</main>
+
+<script>
+const COURSE={name:"Tuusulan Golfklubi",par:71,holes:[
+{number:1,par:4},{number:2,par:3},{number:3,par:4},{number:4,par:5},{number:5,par:4},
+{number:6,par:4},{number:7,par:5},{number:8,par:5},{number:9,par:3},{number:10,par:4},
+{number:11,par:4},{number:12,par:3},{number:13,par:4},{number:14,par:3},{number:15,par:4},
+{number:16,par:5},{number:17,par:3},{number:18,par:4}
+]};
+
+const STORAGE_KEY="tgk_rounds_v1";
+
+function loadRounds(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    return raw?JSON.parse(raw):[];
+  }catch(e){
+    return [];
+  }
+}
+
+function saveRounds(r){
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(r));
+}
+
+function createEmptyRound(){
+  return {
+    id:Date.now().toString(),
+    date:new Date().toISOString(),
+    courseName:COURSE.name,
+    holes:COURSE.holes.map(h=>({
+      hole:h.number,
+      par:h.par,
+      fir:null,
+      gir:null,
+      strokes:null
+    }))
+  };
+}
+
+function classifyResult(par,s){
+  if(s==null) return null;
+  if(s>=10) return "other";
+
+  if(par===3){
+    if(s===1) return "holeInOne";
+    if(s===2) return "birdie";
+    if(s===3) return "par";
+    if(s===4) return "bogey";
+    if(s===5) return "doubleBogey";
+    if(s===6) return "tripleBogey";
+    return "other";
+  }
+
+  if(par===4){
+    if(s===1) return "holeInOne";
+    if(s===2) return "eagle";
+    if(s===3) return "birdie";
+    if(s===4) return "par";
+    if(s===5) return "bogey";
+    if(s===6) return "doubleBogey";
+    if(s===7) return "tripleBogey";
+    return "other";
+  }
+
+  if(par===5){
+    if(s===1) return "holeInOne";
+    if(s===2) return "albatross";
+    if(s===3) return "eagle";
+    if(s===4) return "birdie";
+    if(s===5) return "par";
+    if(s===6) return "bogey";
+    if(s===7) return "doubleBogey";
+    if(s===8) return "tripleBogey";
+    return "other";
+  }
+
+  return "other";
+}
+
+function summarizeRound(r){
+  let total=0,firC=0,firP=0,girC=0,girP=0;
+  const rc={
+    holeInOne:0,albatross:0,eagle:0,birdie:0,par:0,
+    bogey:0,doubleBogey:0,tripleBogey:0,other:0
+  };
+
+  r.holes.forEach(h=>{
+    if(h.strokes!=null){
+      total+=h.strokes>=10?10:h.strokes;
+
+      const res=classifyResult(h.par,h.strokes);
+      if(res) rc[res]++;
+
+      if(h.par>=4){
+        firP++;
+        if(h.fir===true) firC++;
+      }
+
+      girP++;
+      if(h.gir===true) girC++;
+    }
+  });
+
+  return {
+    totalStrokes:total,
+    scoreRelativeToPar:total-COURSE.par,
+    firCount:firC,
+    firPossible:firP,
+    girCount:girC,
+    girPossible:girP,
+    firPercentage:firP?Math.round(firC/firP*100):0,
+    girPercentage:girP?Math.round(girC/girP*100):0,
+    resultCounts:rc
+  };
+}
+
+function formatDate(d){
+  const x=new Date(d);
+  return x.toLocaleString("fi-FI",{
+    year:"numeric",month:"2-digit",day:"2-digit",
+    hour:"2-digit",minute:"2-digit"
+  });
+}
+
+const appState={
+  view:"home",
+  rounds:loadRounds(),
+  currentRound:null,
+  currentHoleIndex:0,
+  summaryData:null
+};
+
+function setView(v){
+  appState.view=v;
+  render();
+}
+
+function startNewRound(){
+  appState.currentRound=createEmptyRound();
+  appState.currentHoleIndex=0;
+  appState.summaryData=null;
+  setView("round");
+}
+
+function openSummary(r){
+  appState.currentRound=r;
+  appState.summaryData=summarizeRound(r);
+  setView("summary");
+}
+
+function finishCurrentRound(){
+  const s=summarizeRound(appState.currentRound);
+  appState.summaryData=s;
+  appState.currentRound.totalStrokes=s.totalStrokes;
+  appState.currentRound.scoreRelativeToPar=s.scoreRelativeToPar;
+  appState.rounds.push(appState.currentRound);
+  saveRounds(appState.rounds);
+  setView("summary");
+}
+
+function deleteAllRounds(){
+  if(confirm("Poistetaanko kaikki tallennetut kierrokset?")){
+    appState.rounds=[];
+    saveRounds(appState.rounds);
+    render();
+  }
+}
+
+function deleteRound(id){
+  if(confirm("Haluatko varmasti poistaa tämän kierroksen?")){
+    appState.rounds=appState.rounds.filter(r=>r.id!==id);
+    saveRounds(appState.rounds);
+    setView("home");
+  }
+}
+
+function updateHoleField(f,v){
+  appState.currentRound.holes[appState.currentHoleIndex][f]=v;
+  render();
+}
+
+function handleKeypadInput(k){
+  const h=appState.currentRound.holes[appState.currentHoleIndex];
+  let c=h.strokes==null?"":(h.strokes>=10?"-":String(h.strokes));
+
+  if(k==="backspace") c=c.slice(0,-1);
+  else if(k==="-") c="-";
+  else{
+    if(c==="-"||c.length>=1) c=k;
+    else c+=k;
+  }
+
+  if(c==="") h.strokes=null;
+  else if(c==="-") h.strokes=10;
+  else{
+    const n=parseInt(c);
+    if(n>=1&&n<=9) h.strokes=n;
+  }
+
+  render();
+}
+
+function nextHole(){
+  const h=appState.currentRound.holes[appState.currentHoleIndex];
+  if(h.strokes==null){
+    alert("Anna lyöntimäärä ennen kuin siirryt seuraavaan väylään.");
+    return;
+  }
+  if(appState.currentHoleIndex<17){
+    appState.currentHoleIndex++;
+    render();
+  }
+}
+
+function goToHole(i){
+  appState.currentHoleIndex=i;
+  render();
+}
+function renderHome(){
+  const c=document.createElement("div");
+  const card=document.createElement("div");
+  card.className="card";
+
+  const h=document.createElement("div");
+  h.className="flex-between";
+
+  const t=document.createElement("h2");
+  t.textContent="Aiemmat kierrokset";
+
+  const b=document.createElement("button");
+  b.textContent="Aloita uusi kierros";
+  b.onclick=startNewRound;
+
+  h.appendChild(t);
+  h.appendChild(b);
+  card.appendChild(h);
+
+  if(appState.rounds.length===0){
+    const p=document.createElement("p");
+    p.textContent="Ei vielä tallennettuja kierroksia.";
+    card.appendChild(p);
+  } else {
+    const table=document.createElement("table");
+    table.innerHTML="<thead><tr><th>Päivämäärä</th><th>Tulos</th><th>Par 71</th><th></th></tr></thead>";
+
+    const tb=document.createElement("tbody");
+
+    appState.rounds
+      .slice()
+      .sort((a,b)=>new Date(b.date)-new Date(a.date))
+      .forEach(r=>{
+        const s=summarizeRound(r);
+        const rel=s.scoreRelativeToPar;
+        const relS=rel>0?`+${rel}`:rel;
+
+        const tr=document.createElement("tr");
+        tr.innerHTML=`
+          <td>${formatDate(r.date)}</td>
+          <td>${s.totalStrokes}</td>
+          <td>${relS}</td>
+          <td><button class="secondary" data-id="${r.id}">Näytä</button></td>
+        `;
+        tb.appendChild(tr);
+      });
+
+    table.appendChild(tb);
+    card.appendChild(table);
+
+    table.onclick=e=>{
+      if(e.target.tagName==="BUTTON"){
+        const id=e.target.dataset.id;
+        openSummary(appState.rounds.find(r=>r.id===id));
+      }
+    };
+
+    const del=document.createElement("button");
+    del.textContent="Poista kaikki kierrokset";
+    del.className="danger";
+    del.onclick=deleteAllRounds;
+    card.appendChild(del);
+  }
+
+  c.appendChild(card);
+  return c;
+}
+
+function renderRound(){
+  const r=appState.currentRound;
+  const h=r.holes[appState.currentHoleIndex];
+
+  const c=document.createElement("div");
+  const card=document.createElement("div");
+  card.className="card";
+
+  const top=document.createElement("div");
+  top.className="flex-between";
+
+  const t=document.createElement("h2");
+  t.textContent=`Kierros · Väylä ${h.hole}`;
+
+  const par=document.createElement("span");
+  par.className="badge-par";
+  par.textContent=`Par ${h.par}`;
+  t.appendChild(par);
+
+  const sm=document.createElement("div");
+  sm.className="small";
+  sm.textContent=COURSE.name;
+
+  top.appendChild(t);
+  top.appendChild(sm);
+  card.appendChild(top);
+
+  const tabs=document.createElement("div");
+  tabs.className="hole-tabs";
+
+  r.holes.forEach((x,i)=>{
+    const b=document.createElement("button");
+    b.className="hole-tab"+(i===appState.currentHoleIndex?" active":"");
+    b.textContent=x.hole;
+    b.onclick=()=>goToHole(i);
+    tabs.appendChild(b);
+  });
+
+  card.appendChild(tabs);
+
+  if(h.par>=4){
+    const l=document.createElement("div");
+    l.textContent="1. Osuitko avauksella väylään (FIR)?";
+    card.appendChild(l);
+
+    const tg=document.createElement("div");
+    tg.className="pill-toggle";
+
+    const y=document.createElement("button");
+    y.textContent="Kyllä";
+
+    const n=document.createElement("button");
+    n.textContent="Ei";
+
+    if(h.fir===true) y.classList.add("active-yes");
+    if(h.fir===false) n.classList.add("active-no");
+
+    y.onclick=()=>updateHoleField("fir",true);
+    n.onclick=()=>updateHoleField("fir",false);
+
+    tg.appendChild(y);
+    tg.appendChild(n);
+    card.appendChild(tg);
+  }
+
+  const gl=document.createElement("div");
+  gl.textContent="2. Green in regulation (GIR)?";
+  card.appendChild(gl);
+
+  const gt=document.createElement("div");
+  gt.className="pill-toggle";
+
+  const gy=document.createElement("button");
+  gy.textContent="Kyllä";
+
+  const gn=document.createElement("button");
+  gn.textContent="Ei";
+
+  if(h.gir===true) gy.classList.add("active-yes");
+  if(h.gir===false) gn.classList.add("active-no");
+
+  gy.onclick=()=>updateHoleField("gir",true);
+  gn.onclick=()=>updateHoleField("gir",false);
+
+  gt.appendChild(gy);
+  gt.appendChild(gn);
+  card.appendChild(gt);
+
+  const sl=document.createElement("div");
+  sl.textContent="3. Lyöntimäärä (1–9, viiva = 10):";
+  card.appendChild(sl);
+
+  const sd=document.createElement("div");
+  sd.style.fontSize="1.4rem";
+  sd.style.marginTop=".25rem";
+  sd.style.minHeight="1.6rem";
+  sd.textContent=h.strokes==null?"":(h.strokes>=10?"-":h.strokes);
+  card.appendChild(sd);
+
+  const kp=document.createElement("div");
+  kp.className="keypad";
+
+  ["1","2","3","4","5","6","7","8","9","-","backspace"].forEach(k=>{
+    const b=document.createElement("button");
+    b.textContent=k==="backspace"?"⌫":k;
+    b.onclick=()=>handleKeypadInput(k);
+    kp.appendChild(b);
+  });
+
+  card.appendChild(kp);
+
+  const br=document.createElement("div");
+  br.className="flex-between";
+
+  const back=document.createElement("button");
+  back.className="secondary";
+  back.textContent="Takaisin etusivulle";
+  back.onclick=()=>setView("home");
+
+  const next=document.createElement("button");
+
+  if(appState.currentHoleIndex===17){
+    next.textContent="Lopeta kierros";
+    next.onclick=()=>{
+      if(h.strokes==null){
+        alert("Anna lyöntimäärä ennen kierroksen lopettamista.");
+        return;
+      }
+      finishCurrentRound();
+    };
+  } else {
+    next.textContent="Seuraava väylä";
+    next.onclick=nextHole;
+  }
+
+  br.appendChild(back);
+  br.appendChild(next);
+  card.appendChild(br);
+
+  c.appendChild(card);
+  return c;
+}
+
+function renderSummary(){
+  const r=appState.currentRound;
+  const s=appState.summaryData;
+
+  const c=document.createElement("div");
+  const card=document.createElement("div");
+  card.className="card";
+
+  const top=document.createElement("div");
+  top.className="flex-between";
+
+  const t=document.createElement("h2");
+  t.textContent="Kierroksen yhteenveto";
+
+  const d=document.createElement("div");
+  d.className="small";
+  d.textContent=formatDate(r.date);
+
+  top.appendChild(t);
+  top.appendChild(d);
+  card.appendChild(top);
+
+  const rel=s.scoreRelativeToPar;
+  const relS=rel>0?`+${rel}`:rel;
+
+  const grid=document.createElement("div");
+  grid.className="summary-grid";
+
+  grid.innerHTML=`
+    <div class="summary-box"><strong>Kokonaistulos</strong>${s.totalStrokes} (Par 71, ${relS})</div>
+    <div class="summary-box"><strong>FIR</strong>${s.firCount}/${s.firPossible} (${s.firPercentage} %)</div>
+    <div class="summary-box"><strong>GIR</strong>${s.girCount}/${s.girPossible} (${s.girPercentage} %)</div>
+    <div class="summary-box"><strong>Tulostyypit</strong>
+      Hole in one: ${s.resultCounts.holeInOne}<br>
+      Albatross: ${s.resultCounts.albatross}<br>
+      Eagle: ${s.resultCounts.eagle}<br>
+      Birdie: ${s.resultCounts.birdie}<br>
+      Par: ${s.resultCounts.par}<br>
+      Bogey: ${s.resultCounts.bogey}<br>
+      2x bogey: ${s.resultCounts.doubleBogey}<br>
+      3x bogey: ${s.resultCounts.tripleBogey}<br>
+      Other: ${s.resultCounts.other}
+    </div>
+  `;
+
+  card.appendChild(grid);
+
+  const table=document.createElement("table");
+  table.innerHTML="<thead><tr><th>Väylä</th><th>Par</th><th>Lyönnit</th><th>Erotus</th><th>FIR</th><th>GIR</th></tr></thead>";
+
+  const tb=document.createElement("tbody");
+
+  r.holes.forEach(h=>{
+    const st=h.strokes==null?"":(h.strokes>=10?"-":h.strokes);
+    const diff=h.strokes==null?"":((h.strokes>=10?10:h.strokes)-h.par);
+    const diffS=diff===""?"":(diff>0?`+${diff}`:diff);
+
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td>${h.hole}</td>
+      <td>${h.par}</td>
+      <td>${st}</td>
+      <td>${diffS}</td>
+      <td>${h.par>=4?(h.fir===true?"Kyllä":h.fir===false?"Ei":""):"-"}</td>
+      <td>${h.gir===true?"Kyllä":h.gir===false?"Ei":""}</td>
+    `;
+    tb.appendChild(tr);
+  });
+
+  table.appendChild(tb);
+  card.appendChild(table);
+
+  const br=document.createElement("div");
+  br.className="flex-between";
+
+  const back=document.createElement("button");
+  back.className="secondary";
+  back.textContent="Takaisin etusivulle";
+  back.onclick=()=>setView("home");
+
+  const del=document.createElement("button");
+  del.className="danger";
+  del.textContent="Poista kierros";
+  del.onclick=()=>deleteRound(r.id);
+
+  br.appendChild(back);
+  br.appendChild(del);
+  card.appendChild(br);
+
+  c.appendChild(card);
+  return c;
+}
+
+function render(){
+  const app=document.getElementById("app");
+  app.innerHTML="";
+
+  if(appState.view==="home") app.appendChild(renderHome());
+  else if(appState.view==="round") app.appendChild(renderRound());
+  else if(appState.view==="summary") app.appendChild(renderSummary());
+}
+
+render();
+</script>
+</body>
+</html>
