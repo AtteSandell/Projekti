@@ -1,0 +1,23 @@
+1. Avaa sovellus selaimessa
+
+2. Paina “Aloita uusi kierros”
+
+3. Varmista, että väylä 1 avautuu
+
+4. Syötä lyöntimäärä (FIR ja GIR ovat vapaaehtoisia)
+
+5. Siirry seuraavalle väylälle. Huomioi, ettei seuraavalle väylälle voi siirtyä ilman lyöntimäärän täyttöä.
+
+6. Toista väylälle 18 asti
+
+7. Tarkista, että yhteenvetosivu avautuu päätettyäsi kierroksen
+
+8. Tarkista, että tulokset tallentuvat etusivulle
+
+9. Sulje selain ja avaa uudelleen
+
+10. Varmista, että kierros näkyy edelleen
+
+11. Testaa yksittäisen kierroksen poistaminen
+
+12. Testaa kaikkien kierrosten poistaminen
