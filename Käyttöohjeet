@@ -1,0 +1,10 @@
+1. Avaa sovellus selaimessa
+2. Valitse "Aloita uusi kierros"
+3. Syötä väyläkohtiaset tiedot (Lyöntimäärä pakollinen)
+4. Aikaisempiin väyliin voi palata väylälistasta
+5. Lopeta kierros väylän 18 jälkeen valitsemalla "Lopeta kierros"
+6. Kierroksen yhteenveto aukeaa
+7. Palaa etusivulle valitsemalla "palaa etusivulle"
+8. Etusivulla voi palata tarkastelemaan kierroksen yhteenvetoa valitsemalla "Näytä" halutun kierroksen kohdalla
+9. Etusivulla voi poistaa kaikki kierrokset valitsemalla "Poista kaikki kierrokset"
+10. Kierroksen yhteenvedossa voi poistaa yksittäisen kierroksen valitsemalla "Poista kierros"
